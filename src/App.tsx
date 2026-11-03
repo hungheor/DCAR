@@ -197,7 +197,35 @@ export default function App() {
   const handleAddOrder = (newOrder: OrderItem) => {
     const updatedOrders = [newOrder, ...orders];
     setOrders(updatedOrders);
-
+// HÀM GỬI DỮ LIỆU CẬP NHẬT NGƯỢC VỀ GOOGLE SHEETS
+async function saveOrderToSheet(updatedOrder: OrderItem) {
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      mode: "no-cors", // Bắt buộc để tránh lỗi chặn bảo mật CORS của trình duyệt khi gọi Apps Script
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sheet: "2_DonHang_LSX", // Tên sheet chứa đơn hàng trên Google Sheets của Sếp
+        action: "update",
+        payload: {
+          MaLSX: updatedOrder.id,
+          KhachHang: updatedOrder.customerName,
+          DongXe_PhienBan: updatedOrder.conversionVersion,
+          LoaiDon: updatedOrder.orderType,
+          NgayGiaoCamKet: updatedOrder.dueDate,
+          TrangThai: updatedOrder.status,
+          TienDo: updatedOrder.progress,
+          GhiChu: updatedOrder.notes
+        }
+      })
+    });
+    console.log("Đã gửi dữ liệu cập nhật về Google Sheets thành công!");
+  } catch (error) {
+    console.error("Lỗi khi ghi dữ liệu về Google Sheets:", error);
+  }
+}
     // Re-run MRP & CRP balancing
     const { updatedMaterials } = runMRPBalancing(updatedOrders, materials);
     setMaterials(updatedMaterials);
