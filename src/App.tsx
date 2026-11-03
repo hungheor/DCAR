@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Role,
   OrderItem,
@@ -49,6 +49,9 @@ import { AlertCenter } from './components/AlertCenter';
 import { MobileWorkshopView } from './components/MobileWorkshopView';
 import { UserRoleManagement } from './components/UserRoleManagement';
 
+// LINK GOOGLE APPS SCRIPT API CỦA SẾP
+const API_URL = "https://script.google.com/macros/s/AKfycbxSxVgH_b0Lerx4p0fzOdAW8svAjnbevAe3TliSqFVSjgED3OvFC1PPbjd1Z97d14w7/exec";
+
 export default function App() {
   // Users & Role State
   const [users, setUsers] = useState<AppUser[]>(INITIAL_APP_USERS);
@@ -59,6 +62,64 @@ export default function App() {
 
   // Cross-report Deep-Link Navigation State
   const [navTarget, setNavTarget] = useState<NavigationTarget | null>(null);
+
+  // Domain Entity State (Khởi tạo mặc định từ mockData, sau đó sẽ sync Google Sheets)
+  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_ORDERS);
+  const [materials, setMaterials] = useState<MRPItem[]>(INITIAL_MRP_MATERIALS);
+  const [workcenters, setWorkcenters] = useState<CRPWorkcenter[]>(INITIAL_CRP_WORKCENTERS);
+  const [teams, setTeams] = useState<ProductionTeam[]>(INITIAL_TEAMS);
+  const [btpItems, setBtpItems] = useState<BTPInventoryItem[]>(INITIAL_BTP_ITEMS);
+  const [alerts, setAlerts] = useState<SystemAlert[]>(INITIAL_ALERTS);
+
+  // FETCH DỮ LIỆU TỪ GOOGLE SHEETS KHI MỞ WEB
+  useEffect(() => {
+    async function fetchGoogleSheetData() {
+      try {
+        // Gọi dữ liệu Đơn hàng từ sheet 2_DonHang_LSX
+        const resOrders = await fetch(`${API_URL}?sheet=2_DonHang_LSX`);
+        const dataOrders = await resOrders.json();
+        if (Array.isArray(dataOrders) && dataOrders.length > 0) {
+          // Map dữ liệu từ Google Sheets sang định dạng OrderItem của hệ thống MES
+          const mappedOrders: OrderItem[] = dataOrders.map((item: any, idx: number) => ({
+            id: item.MaLSX || `LSX-${idx + 1}`,
+            contractId: item.MaHopDong || `HD-${idx + 1}`,
+            customerName: item.KhachHang || 'Khách lẻ',
+            conversionVersion: item.DongXe_PhienBan || 'Limousine Standard',
+            orderType: item.LoaiDon || 'MTO',
+            dueDate: item.NgayGiaoCamKet || '2026-12-31',
+            status: item.TrangThai || 'APPROVED_LSX',
+            progress: Number(item.TienDo) || 0,
+            currentCluster: item.CumHienTai || 'Cụm 1',
+            currentTeam: item.ToHienTai || 'Tổ Chuẩn bị',
+            currentDay: Number(item.NgayHienTai) || 1,
+            mrpReady: true,
+            crpFeasible: true,
+            notes: item.GhiChu || '',
+          }));
+          setOrders(mappedOrders);
+        }
+
+        // Gọi dữ liệu Bán thành phẩm từ sheet 5_BanThanhPham_BTP
+        const resBTP = await fetch(`${API_URL}?sheet=5_BanThanhPham_BTP`);
+        const dataBTP = await resBTP.json();
+        if (Array.isArray(dataBTP) && dataBTP.length > 0) {
+          const mappedBTP: BTPInventoryItem[] = dataBTP.map((item: any, idx: number) => ({
+            id: item.MaBTP || `BTP-${idx + 1}`,
+            name: item.TenBanThanhPham || 'Bán thành phẩm',
+            teamId: item.ToNghiepVu || 'To_01',
+            quantity: Number(item.SoLuongTon) || 0,
+            bufferThreshold: Number(item.NguongBuffer) || 10,
+            status: item.DanhGiaTon || 'STABLE',
+          }));
+          setBtpItems(mappedBTP);
+        }
+      } catch (error) {
+        console.error("Lỗi đồng bộ Google Sheets, giữ nguyên dữ liệu mẫu:", error);
+      }
+    }
+
+    fetchGoogleSheetData();
+  }, []);
 
   const handleNavigate = (target: NavigationTarget) => {
     setNavTarget(target);
@@ -80,14 +141,6 @@ export default function App() {
     setCurrentUser(user);
     setCurrentRole(user.role);
   };
-
-  // Domain Entity State
-  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_ORDERS);
-  const [materials, setMaterials] = useState<MRPItem[]>(INITIAL_MRP_MATERIALS);
-  const [workcenters, setWorkcenters] = useState<CRPWorkcenter[]>(INITIAL_CRP_WORKCENTERS);
-  const [teams, setTeams] = useState<ProductionTeam[]>(INITIAL_TEAMS);
-  const [btpItems, setBtpItems] = useState<BTPInventoryItem[]>(INITIAL_BTP_ITEMS);
-  const [alerts, setAlerts] = useState<SystemAlert[]>(INITIAL_ALERTS);
 
   // HANDLER: Update workstation assignment (Phân quyền vị trí trạm)
   const handleUpdateStationAssignment = (
